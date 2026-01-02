@@ -1,73 +1,62 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-// Ton lien d'authentification direct pour le serveur de fichiers
-const FILE_SERVER_AUTH_URL = "https://sso.univ-pau.fr/cas/login?service=https%3a%2f%2ffichiers.univ-pau.fr%2fAnnales%2f";
+// TON LIEN UNIQUE (La Clé Maîtresse)
+const UNIVERSITÉ_AUTH_URL = "https://sso.univ-pau.fr/cas/login?service=https%3a%2f%2ffichiers.univ-pau.fr%2fAnnales%2f";
 
 export default function AuthGuard({ children }) {
-  const [step, setStep] = useState('loading'); // loading, need_auth, ready
+  const [hasAccess, setHasAccess] = useState(false);
 
   useEffect(() => {
-    const SERVICE_URL = window.location.origin + window.location.pathname;
-    const APP_LOGIN_URL = `https://sso.univ-pau.fr/cas/login?service=${encodeURIComponent(SERVICE_URL)}`;
-    
-    // Vérification des sessions
-    const oracleAuth = sessionStorage.getItem('oracle_auth');
-    const params = new URLSearchParams(window.location.search);
-    const ticket = params.get('ticket');
-
-    if (oracleAuth === 'true') {
-      setStep('ready');
-    } else if (ticket) {
-      // Retour du SSO : on valide l'entrée et on nettoie l'URL
-      sessionStorage.setItem('oracle_auth', 'true');
-      window.history.replaceState({}, document.title, window.location.pathname);
-      setStep('ready');
-    } else {
-      // Redirection initiale
-      window.location.href = APP_LOGIN_URL;
+    // On vérifie si l'utilisateur a déjà activé sa session aujourd'hui
+    const sessionActive = sessionStorage.getItem('promethee_session');
+    if (sessionActive === 'true') {
+      setHasAccess(true);
     }
   }, []);
 
-  // ÉCRAN DE SYNCHRONISATION (Si l'utilisateur n'a pas encore activé les fichiers)
-  // On peut ajouter un petit bouton dans l'Oracle ou forcer ce passage une fois
-  if (step === 'ready' && !sessionStorage.getItem('files_synced')) {
+  const handleIdentification = () => {
+    // 1. On ouvre le lien de l'université dans un nouvel onglet
+    // Cela permet à l'utilisateur de se connecter et d'obtenir le cookie des fichiers
+    window.open(UNIVERSITÉ_AUTH_URL, '_blank');
+    
+    // 2. On active l'accès sur l'application Prométhée
+    sessionStorage.setItem('promethee_session', 'true');
+    setHasAccess(true);
+  };
+
+  // --- ÉCRAN DE VERROUILLAGE (Le Portail) ---
+  if (!hasAccess) {
     return (
-      <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-6 text-center font-cinzel">
-        <div className="max-w-md border border-[#D4AF37]/30 bg-[#0f172a] p-8 rounded-2xl shadow-[0_0_50px_rgba(212,175,55,0.1)]">
-          <h2 className="text-[#D4AF37] text-2xl mb-4 tracking-tighter uppercase">Lien des Archives</h2>
-          <p className="text-slate-400 text-sm mb-8 leading-relaxed font-inter uppercase tracking-widest opacity-80">
-            Pour que l'Oracle puisse dévoiler les PDF, vous devez activer l'accès au serveur de fichiers de l'UPPA.
+      <div className="min-h-screen bg-[#020617] flex items-center justify-center p-6 font-cinzel relative overflow-hidden">
+        {/* Effet de lueur en arrière-plan */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[#D4AF37]/10 blur-[120px] rounded-full"></div>
+
+        <div className="relative z-10 max-w-lg w-full text-center border border-[#D4AF37]/20 bg-[#0f172a]/80 backdrop-blur-2xl p-10 md:p-16 rounded-3xl shadow-2xl">
+          <h1 className="text-4xl md:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-[#f7e3a3] to-[#D4AF37] mb-6 tracking-tighter uppercase">
+            Prométhée
+          </h1>
+          
+          <div className="h-[1px] w-24 bg-[#D4AF37]/40 mx-auto mb-8"></div>
+          
+          <p className="text-[#D4AF37]/70 text-sm md:text-base mb-12 leading-relaxed tracking-widest uppercase">
+            Pour réveiller l'Oracle et accéder aux parchemins, identifiez-vous via le portail de l'Université.
           </p>
-          
-          <a 
-            href={FILE_SERVER_AUTH_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => {
-              sessionStorage.setItem('files_synced', 'true');
-              // On laisse un petit délai pour que l'utilisateur voit l'onglet s'ouvrir
-              setTimeout(() => window.location.reload(), 500);
-            }}
-            className="inline-block px-8 py-4 bg-[#D4AF37] text-black font-bold rounded-full hover:scale-105 transition-transform shadow-[0_0_20px_rgba(212,175,55,0.4)]"
+
+          <button
+            onClick={handleIdentification}
+            className="group relative inline-flex items-center justify-center px-10 py-5 font-bold text-black transition-all duration-300 bg-[#D4AF37] rounded-full hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(212,175,55,0.3)]"
           >
-            ACTIVER LES FICHIERS →
-          </a>
-          
-          <p className="mt-6 text-[10px] text-slate-500 font-inter italic uppercase tracking-tighter">
-            Note: Cliquez, laissez l'onglet s'ouvrir, puis revenez ici.
+            <span className="tracking-[0.2em] uppercase">S'identifier →</span>
+          </button>
+
+          <p className="mt-10 text-[10px] text-slate-500 font-inter uppercase tracking-tighter opacity-50">
+            Une seule connexion requise pour libérer le savoir.
           </p>
         </div>
       </div>
     );
   }
 
-  if (step === 'loading') {
-    return (
-      <div className="min-h-screen bg-[#020617] flex items-center justify-center">
-        <div className="w-12 h-12 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
+  // Si identifié, on affiche l'Oracle
   return children;
 }
