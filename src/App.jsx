@@ -1,4 +1,5 @@
-import Oracle from './components/Oracle'
+import AuthGuard from './components/AuthGuard';
+import Oracle from './components/Oracle';
 
 function App() {
   return (
@@ -14,7 +15,9 @@ function App() {
 
       {/* Contenu principal */}
       <main className="relative z-10">
+        <AuthGuard>
         <Oracle />
+        </AuthGuard>
       </main>
 
       {/* Footer minimaliste */}
