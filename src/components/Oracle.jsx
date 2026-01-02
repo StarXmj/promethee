@@ -114,7 +114,8 @@ export default function Oracle() {
           <a 
             href={annale.url} 
             target="_blank" 
-            rel="noopener noreferrer"
+            
+            referrerPolicy="no-referrer-when-downgrade"
             key={idx} 
             className="group relative block p-[1px] rounded-2xl overflow-hidden transition-all duration-500 hover:scale-[1.02] md:hover:scale-[1.03] shadow-2xl"
           >
