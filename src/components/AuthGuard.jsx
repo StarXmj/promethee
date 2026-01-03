@@ -1,70 +1,77 @@
 import React, { useState, useEffect } from 'react';
+import { ShieldAlert, Loader2, ExternalLink, RefreshCw } from 'lucide-react';
 
-// URL qui dépose le cookie sur le serveur de fichiers
-const UPPA_AUTH_URL = "https://sso.univ-pau.fr/cas/login?service=https%3a%2f%2ffichiers.univ-pau.fr%2fAnnales%2f";
+const AuthGuard = ({ children }) => {
+  const [status, setStatus] = useState('checking'); 
+  // URL spécifique que tu as fournie pour primer la session des annales
+  const UPPA_CAS_URL = "https://sso.univ-pau.fr/cas/login?service=https%3a%2f%2ffichiers.univ-pau.fr%2fAnnales%2f";
 
-export default function AuthGuard({ children }) {
-  const [isUnlocked, setIsUnlocked] = useState(false);
-
-  useEffect(() => {
-    // On vérifie si la session est active dans cet onglet
-    const session = sessionStorage.getItem('promethee_unlocked');
-    if (session === 'true') {
-      setIsUnlocked(true);
+  const checkUPPASession = async () => {
+    try {
+      // On teste directement le serveur de fichiers pour être sûr
+      await fetch('https://fichiers.univ-pau.fr/Annales/', { 
+        mode: 'no-cors', 
+        cache: 'no-store' 
+      });
+      setStatus('authenticated');
+    } catch (error) {
+      setStatus('expired');
     }
-  }, []);
-
-  const handleUnlock = () => {
-    // 1. On ouvre l'authentification UPPA dans un NOUVEL onglet
-    // Cela permet d'obtenir le cookie de session sans quitter Prométhée
-    window.open(UPPA_AUTH_URL, '_blank');
-    
-    // 2. On déverrouille l'Oracle sur l'onglet actuel
-    sessionStorage.setItem('promethee_unlocked', 'true');
-    setIsUnlocked(true);
   };
 
-  if (!isUnlocked) {
+  useEffect(() => {
+    checkUPPASession();
+    // Vérification toutes les 2 minutes pour anticiper l'expiration
+    const interval = setInterval(checkUPPASession, 120000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (status === 'checking') {
     return (
-      <div className="min-h-screen bg-[#020617] flex items-center justify-center p-4 font-cinzel">
-        {/* Background Aura */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#D4AF37]/5 blur-[120px] rounded-full"></div>
-        </div>
+      <div className="h-screen w-full bg-[#020617] flex flex-col items-center justify-center text-[#D4AF37]">
+        <Loader2 className="animate-spin mb-4" size={40} />
+        <p className="font-cinzel tracking-widest text-sm animate-pulse text-center px-4">
+          Synchronisation avec les serveurs de l'UPPA...
+        </p>
+      </div>
+    );
+  }
 
-        <div className="relative z-10 max-w-lg w-full bg-[#0f172a]/60 backdrop-blur-3xl border border-[#D4AF37]/20 p-8 md:p-12 rounded-[2rem] shadow-2xl text-center">
-          <h1 className="text-5xl md:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-[#f7e3a3] to-[#D4AF37] mb-6 tracking-tighter">
-            PROMÉTHÉE
-          </h1>
-          
-          <div className="w-12 h-[1px] bg-[#D4AF37]/50 mx-auto mb-8"></div>
-          
-          <p className="text-[#D4AF37]/80 text-sm md:text-base mb-10 leading-relaxed tracking-[0.1em] uppercase">
-            Pour accéder aux archives sacrées, vous devez réveiller votre session universitaire.
+  if (status === 'expired') {
+    return (
+      <div className="h-screen w-full bg-[#020617] p-6 flex items-center justify-center">
+        <div className="max-w-md w-full bg-[#0f172a] border border-rose-500/30 p-8 rounded-3xl text-center shadow-[0_0_50px_rgba(244,63,94,0.15)]">
+          <div className="bg-rose-500/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+            <ShieldAlert className="text-rose-500" size={32} />
+          </div>
+          <h2 className="text-2xl font-cinzel font-bold text-white mb-4 uppercase tracking-tight">Accès Interrompu</h2>
+          <p className="text-slate-400 text-sm mb-8 leading-relaxed">
+            Votre session sur le serveur de fichiers de l'UPPA a expiré. 
+            L'accès aux documents nécessite une ré-authentification immédiate.
           </p>
-
-          <button
-            onClick={handleUnlock}
-            className="group relative inline-flex items-center justify-center px-10 py-4 font-bold text-black transition-all duration-300 bg-[#D4AF37] rounded-full hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(212,175,55,0.2)]"
-          >
-            <span className="tracking-widest uppercase text-sm">S'identifier & Entrer</span>
-          </button>
-
-          <div className="mt-10 space-y-2 opacity-40">
-            <p className="text-[10px] text-slate-400 uppercase tracking-tighter">
-              1. Cliquez sur le bouton (un onglet s'ouvrira)
-            </p>
-            <p className="text-[10px] text-slate-400 uppercase tracking-tighter">
-              2. Connectez-vous sur le portail UPPA
-            </p>
-            <p className="text-[10px] text-slate-400 uppercase tracking-tighter">
-              3. Revenez ici pour consulter les stèles
-            </p>
+          
+          <div className="flex flex-col gap-4">
+            <a 
+              href={UPPA_CAS_URL}
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-3 bg-[#D4AF37] text-black font-bold py-4 rounded-xl hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(212,175,55,0.2)]"
+            >
+              RÉACTIVER MA SESSION <ExternalLink size={18} />
+            </a>
+            <button 
+              onClick={() => { setStatus('checking'); checkUPPASession(); }}
+              className="flex items-center justify-center gap-2 text-[#D4AF37] text-xs font-cinzel font-bold tracking-widest py-2 hover:opacity-80 transition-opacity"
+            >
+              <RefreshCw size={14} /> J'AI EFFECTUÉ LA CONNEXION
+            </button>
           </div>
         </div>
       </div>
     );
   }
 
-  return children;
-}
+  return <>{children}</>;
+};
+
+export default AuthGuard;

@@ -1,28 +1,34 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import HomePage from './components/HomePage'; // Vérifie bien le chemin ici
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import HomePage from './components/HomePage';
 import AuthGuard from './components/AuthGuard';
-import Oracle from './components/Oracle';
+import SearchPortal from './components/SearchPortal/SearchPortal';
 
+/**
+ * Composant principal de navigation.
+ * Le ton institutionnel impose une structure de routage claire.
+ */
 function App() {
   return (
     <Router>
       <Routes>
-       
-        
-        
+        {/* Accueil public */}
+        <Route path="/" element={<HomePage />} />
 
-        {/* 2. L'Oracle (Protégé par l'identification UPPA) */}
+        {/* Espace de recherche protégé. 
+          L'accès est conditionné par le composant AuthGuard.
+        */}
         <Route 
           path="/oracle" 
           element={
             <AuthGuard>
-              <Oracle />
+              <SearchPortal />
             </AuthGuard>
           } 
         />
-        
-        {/* Redirection automatique si la page n'existe pas */}
-        <Route path="*" element={<HomePage />} />
+
+        {/* Redirection des erreurs 404 vers l'accueil */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   );
