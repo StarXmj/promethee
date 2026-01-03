@@ -9,34 +9,54 @@ export default function TermsAgreement({ onAccept }) {
   const [hasRead, setHasRead] = useState(false);
   const [sessionStatus, setSessionStatus] = useState('idle'); // 'idle' | 'checking' | 'active' | 'error'
 
-  // Configuration des URLs
+  // URL de base de l'app
   const MY_APP_URL = window.location.origin + window.location.pathname;
-  // Gateway = vérification silencieuse (renvoie vers l'app avec ou sans ticket)
-  const CAS_GATEWAY_URL = `https://sso.univ-pau.fr/cas/login?service=${encodeURIComponent(MY_APP_URL)}&gateway=true`;
+  
+  // URL pour la connexion réelle (ouvre le serveur de fichiers)
   const UPPA_CAS_LOGIN = `https://sso.univ-pau.fr/cas/login?service=https%3a%2f%2ffichiers.univ-pau.fr%2fAnnales%2f`;
 
   /**
-   * ACTION : Nettoyage de l'URL et validation
+   * EFFET : Analyse du retour du CAS
    */
   useEffect(() => {
     const ticket = searchParams.get('ticket');
-    if (ticket) {
-      // 1. On valide la session immédiatement
-      setSessionStatus('active');
-      setHasRead(true); // Auto-check pour éviter de bloquer l'utilisateur
-      setHasLogged(true);
+    const wasChecking = searchParams.get('check');
 
-      // 2. On nettoie l'URL pour éviter les boucles au rafraîchissement
+    if (ticket) {
+      // SUCCÈS : Le CAS a renvoyé un ticket
+      setSessionStatus('active');
+      setHasRead(true); 
+      setHasLogged(true);
+      
+      // Nettoyage URL
       const newParams = new URLSearchParams(searchParams);
       newParams.delete('ticket');
+      newParams.delete('check');
+      setSearchParams(newParams, { replace: true });
+    } 
+    else if (wasChecking) {
+      // ÉCHEC : On revient du CAS (check=true) mais il n'y a PAS de ticket
+      setSessionStatus('error');
+      setHasLogged(true); // On garde l'état comme quoi il a essayé
+
+      // Nettoyage du flag de test
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('check');
       setSearchParams(newParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);
 
+  /**
+   * ACTION : Lancer la vérification silencieuse (Gateway)
+   */
   const handleVerify = () => {
     setSessionStatus('checking');
-    // Redirection vers le CAS en mode Gateway
-    window.location.href = CAS_GATEWAY_URL;
+    
+    // On ajoute ?check=true pour savoir au retour qu'on vient de faire le test
+    const callbackUrl = `${MY_APP_URL}${MY_APP_URL.includes('?') ? '&' : '?'}check=true`;
+    const gatewayUrl = `https://sso.univ-pau.fr/cas/login?service=${encodeURIComponent(callbackUrl)}&gateway=true`;
+    
+    window.location.href = gatewayUrl;
   };
 
   return (
@@ -47,7 +67,7 @@ export default function TermsAgreement({ onAccept }) {
           Contrôle d'Accès
         </h2>
         <p className="text-slate-400 font-cinzel tracking-[0.2em] text-[10px] md:text-xs uppercase mb-6">
-          Identification Requise : Serveur de fichiers UPPA
+          Vérification de Session Institutionnelle
         </p>
         <BetaBadge />
       </div>
@@ -61,11 +81,11 @@ export default function TermsAgreement({ onAccept }) {
             <div className="text-[#D4AF37] font-cinzel text-2xl font-bold italic">01</div>
             {sessionStatus === 'active' ? <Unlock size={20} className="text-emerald-400" /> : <Lock size={20} className="text-[#D4AF37]/50" />}
           </div>
-          <h3 className="text-white font-cinzel font-bold mb-2 uppercase text-xs">Connexion</h3>
-          <p className="text-slate-400 text-[10px] mb-6 italic">Ouvrez la session sur le serveur distant.</p>
+          <h3 className="text-white font-cinzel font-bold mb-2 uppercase text-xs">Login</h3>
+          <p className="text-slate-400 text-[10px] mb-6 italic">Connectez-vous d'abord sur l'onglet officiel.</p>
           <button 
             onClick={() => { window.open(UPPA_CAS_LOGIN, '_blank'); setHasLogged(true); }}
-            className="mt-auto flex items-center justify-center gap-2 bg-[#D4AF37] text-black py-3 rounded-xl text-[10px] font-bold hover:scale-105 transition-all uppercase tracking-widest"
+            className="mt-auto flex items-center justify-center gap-2 bg-[#D4AF37] text-black py-3 rounded-xl text-[10px] font-bold hover:scale-105 transition-all uppercase tracking-widest shadow-lg"
           >
             OUVRIR LE SSO <ExternalLink size={12} />
           </button>
@@ -77,7 +97,7 @@ export default function TermsAgreement({ onAccept }) {
         }`}>
           <div className="text-[#D4AF37] font-cinzel text-2xl font-bold mb-4 italic">02</div>
           <h3 className="text-white font-cinzel font-bold mb-2 uppercase text-xs">Sonde</h3>
-          <p className="text-slate-400 text-[10px] mb-6 italic">Synchronisez votre jeton d'accès avec l'Oracle.</p>
+          <p className="text-slate-400 text-[10px] mb-6 italic">Lancez la synchronisation du jeton.</p>
           <button 
             disabled={!hasLogged || sessionStatus === 'checking'}
             onClick={handleVerify}
@@ -87,19 +107,30 @@ export default function TermsAgreement({ onAccept }) {
           </button>
         </div>
 
-        {/* ÉTAPE 03 : ACCÈS */}
+        {/* ÉTAPE 03 : STATUS (MODIFIÉ POUR LE ROUGE) */}
         <div className={`p-6 rounded-2xl border transition-all duration-500 flex flex-col h-full ${
-          sessionStatus === 'active' ? 'bg-emerald-500/10 border-emerald-500/50' : 'bg-white/5 border-white/5 opacity-40'
+          sessionStatus === 'active' ? 'bg-emerald-500/10 border-emerald-500/50' : 
+          sessionStatus === 'error' ? 'bg-rose-500/10 border-rose-500/50' : 'bg-white/5 border-white/5 opacity-40'
         }`}>
           <div className="text-[#D4AF37] font-cinzel text-2xl font-bold mb-4 italic">03</div>
-          <h3 className="text-white font-cinzel font-bold mb-2 uppercase text-xs italic">Accès</h3>
+          <h3 className="text-white font-cinzel font-bold mb-2 uppercase text-xs italic">Résultat</h3>
           <div className="mt-auto">
-            {sessionStatus === 'active' ? (
+            {sessionStatus === 'error' && (
+              <div className="flex items-center gap-2 text-rose-500 animate-pulse">
+                <ShieldX size={18} />
+                <span className="text-[10px] font-bold uppercase">PAS CONNECTÉ</span>
+              </div>
+            )}
+            {sessionStatus === 'active' && (
               <div className="flex items-center gap-2 text-emerald-400">
                 <ShieldCheck size={18} />
-                <span className="text-[9px] font-bold uppercase">Session Active</span>
+                <span className="text-[10px] font-bold uppercase">SESSION ACTIVE</span>
               </div>
-            ) : (
+            )}
+            {sessionStatus === 'checking' && (
+              <span className="text-[9px] text-amber-400 animate-pulse uppercase">Vérification...</span>
+            )}
+            {sessionStatus === 'idle' && (
               <span className="text-[9px] text-slate-500 italic">En attente...</span>
             )}
           </div>
@@ -109,30 +140,25 @@ export default function TermsAgreement({ onAccept }) {
       <div className="flex flex-col items-center gap-6">
         <label className={`flex items-center gap-4 cursor-pointer group max-w-2xl transition-opacity ${sessionStatus !== 'active' ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
           <div className="relative shrink-0">
-            <input 
-              type="checkbox" 
-              className="hidden" 
-              checked={hasRead} 
-              onChange={() => setHasRead(!hasRead)} 
-            />
+            <input type="checkbox" className="hidden" checked={hasRead} onChange={() => setHasRead(!hasRead)} />
             <div className={`w-8 h-8 border-2 rounded-xl flex items-center justify-center transition-all ${
               hasRead ? 'bg-[#D4AF37] border-[#D4AF37]' : 'border-[#D4AF37]/30 group-hover:border-[#D4AF37]'
             }`}>
               {hasRead && <CheckCircle size={20} className="text-black" strokeWidth={3} />}
             </div>
           </div>
-          <span className="text-slate-300 font-cinzel text-xs select-none">
-            Je certifie être connecté au serveur de fichiers de l'UPPA.
+          <span className="text-slate-300 font-cinzel text-[10px] md:text-xs select-none">
+            Je certifie avoir déverrouillé mon accès sur fichiers.univ-pau.fr
           </span>
         </label>
 
         <button
           disabled={!hasRead || sessionStatus !== 'active'}
           onClick={onAccept}
-          className={`w-full md:w-auto px-16 py-5 rounded-full font-bold font-cinzel tracking-[0.3em] uppercase text-sm md:text-lg transition-all duration-500 flex items-center justify-center gap-3 ${
+          className={`w-full md:w-auto px-20 py-5 rounded-full font-bold font-cinzel tracking-[0.3em] uppercase text-sm md:text-lg transition-all duration-500 flex items-center justify-center gap-3 ${
             hasRead && sessionStatus === 'active' 
-              ? 'bg-[#D4AF37] text-black shadow-[0_0_40px_rgba(212,175,55,0.4)] hover:scale-105 cursor-pointer' 
-              : 'bg-white/5 text-slate-600 cursor-not-allowed border border-white/5'
+              ? 'bg-[#D4AF37] text-black shadow-[0_0_50px_rgba(212,175,55,0.4)] hover:scale-105 cursor-pointer' 
+              : 'bg-white/5 text-slate-600 cursor-not-allowed border border-white/5 opacity-50'
           }`}
         >
           Entrer dans le Portail <ArrowRight size={20} />
