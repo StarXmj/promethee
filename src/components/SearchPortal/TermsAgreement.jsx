@@ -7,30 +7,40 @@ export default function TermsAgreement({ onAccept }) {
   const [hasRead, setHasRead] = useState(false);
   const [sessionStatus, setSessionStatus] = useState('idle'); // 'idle' | 'checking' | 'active' | 'error'
   
-  // URL de la zone PROTÉGÉE (Ne peut pas être accédée sans SSO)
+  // URL de la zone réellement protégée
   const PROTECTED_ZONE_URL = "https://fichiers.univ-pau.fr/Annales/";
   const UPPA_CAS_URL = "https://sso.univ-pau.fr/cas/login?service=https%3a%2f%2ffichiers.univ-pau.fr%2fAnnales%2f";
 
-  // VÉRIFICATION DE LA SESSION (Même logique que AuthGuard)
+  /**
+   * VÉRIFICATION TECHNIQUE DE LA SESSION
+   * On utilise 'redirect: manual' pour détecter si le serveur fichiers.univ-pau.fr 
+   * tente de nous renvoyer vers sso.univ-pau.fr
+   */
   const verifySession = async () => {
     setSessionStatus('checking');
 
     try {
-      // On tente d'accéder à la racine des annales.
-      // Si la session n'est pas active, Apache redirige vers le SSO, 
-      // ce qui échoue ou change le comportement de la requête.
-      await fetch(PROTECTED_ZONE_URL, { 
+      const response = await fetch(PROTECTED_ZONE_URL, { 
         mode: 'no-cors', 
+        redirect: 'manual', // CRUCIAL : On empêche le suivi auto de la redirection
         cache: 'no-store' 
       });
-      
-      // Petit délai pour l'expérience utilisateur (visibilité du loader)
-      setTimeout(() => {
+
+      /**
+       * ANALYSE DU TYPE DE RÉPONSE :
+       * - 'opaqueredirect' : Le serveur a tenté de nous rediriger vers le CAS -> NON CONNECTÉ.
+       * - 'opaque' : Le serveur a répondu sans redirection (car nous avons déjà le cookie) -> CONNECTÉ.
+       */
+      if (response.type === 'opaqueredirect') {
+        console.warn("Redirection détectée : l'utilisateur n'est pas authentifié.");
+        setSessionStatus('error');
+      } else {
+        console.log("Accès direct confirmé : session active.");
         setSessionStatus('active');
-      }, 800);
+      }
 
     } catch (error) {
-      console.error("Erreur de session:", error);
+      console.error("Erreur réseau lors de la sonde :", error);
       setSessionStatus('error');
     }
   };
@@ -49,7 +59,7 @@ export default function TermsAgreement({ onAccept }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
-        {/* ÉTAPE 01 : CONNEXION SSO */}
+        {/* ÉTAPE 01 : CONNEXION */}
         <div className={`p-6 rounded-2xl border transition-all duration-500 flex flex-col h-full ${
           sessionStatus === 'active' ? 'bg-emerald-500/10 border-emerald-500/50' : 'bg-[#D4AF37]/5 border-[#D4AF37]/30'
         }`}>
@@ -59,7 +69,7 @@ export default function TermsAgreement({ onAccept }) {
           </div>
           <h3 className="text-white font-cinzel font-bold mb-2 uppercase text-sm">SSO UPPA</h3>
           <p className="text-slate-400 text-[10px] mb-6 leading-relaxed italic">
-            Connectez-vous pour déverrouiller l'accès au serveur de fichiers.
+            Connectez-vous pour obtenir vos jetons d'accès institutionnels.
           </p>
           <button 
             onClick={() => { window.open(UPPA_CAS_URL, '_blank'); setHasLogged(true); }}
@@ -69,17 +79,17 @@ export default function TermsAgreement({ onAccept }) {
           </button>
         </div>
 
-        {/* ÉTAPE 02 : SONDE RÉSEAU */}
+        {/* ÉTAPE 02 : TEST RÉEL */}
         <div className={`p-6 rounded-2xl border transition-all duration-500 flex flex-col h-full ${
           hasLogged ? 'bg-white/5 border-[#D4AF37]/30' : 'bg-white/5 border-white/5 opacity-40'
         }`}>
           <div className="text-[#D4AF37] font-cinzel text-2xl font-bold mb-4 italic">02</div>
           <h3 className="text-white font-cinzel font-bold mb-2 uppercase text-sm">Vérification</h3>
           <p className="text-slate-400 text-[10px] mb-6 leading-relaxed italic text-left">
-            Vérifiez si votre navigateur possède le cookie de session actif.
+            Analyse de la réponse du serveur de fichiers pour confirmer la session.
           </p>
           <button 
-            disabled={!hasLogged && sessionStatus !== 'checking'}
+            disabled={!hasLogged}
             onClick={verifySession}
             className="mt-auto flex items-center justify-center gap-2 border border-[#D4AF37] text-[#D4AF37] py-3 rounded-xl text-[10px] font-bold hover:bg-[#D4AF37]/10 transition-all uppercase tracking-widest disabled:opacity-10"
           >
@@ -87,26 +97,26 @@ export default function TermsAgreement({ onAccept }) {
           </button>
         </div>
 
-        {/* ÉTAPE 03 : ÉTAT DE L'ACCÈS */}
+        {/* ÉTAPE 03 : RÉSULTAT */}
         <div className={`p-6 rounded-2xl border transition-all duration-500 flex flex-col h-full ${
           sessionStatus === 'active' ? 'bg-emerald-500/10 border-emerald-500/50' : 'bg-white/5 border-white/5 opacity-40'
         }`}>
           <div className="text-[#D4AF37] font-cinzel text-2xl font-bold mb-4 italic">03</div>
-          <h3 className="text-white font-cinzel font-bold mb-2 uppercase text-sm italic">Résultat</h3>
+          <h3 className="text-white font-cinzel font-bold mb-2 uppercase text-sm italic">Accès</h3>
           <div className="mt-auto">
             {sessionStatus === 'error' && (
               <div className="flex items-center gap-2 text-rose-500 animate-pulse">
                 <ShieldX size={18} />
-                <span className="text-[9px] font-bold uppercase">Accès Refusé / Non Connecté</span>
+                <span className="text-[9px] font-bold uppercase">Session Non Trouvée</span>
               </div>
             )}
             {sessionStatus === 'active' && (
               <div className="flex items-center gap-2 text-emerald-400">
                 <ShieldCheck size={18} />
-                <span className="text-[9px] font-bold uppercase">Session Validée</span>
+                <span className="text-[9px] font-bold uppercase">Portail Déverrouillé</span>
               </div>
             )}
-            {sessionStatus === 'idle' && <span className="text-[9px] text-slate-500 italic">En attente du test...</span>}
+            {sessionStatus === 'idle' && <span className="text-[9px] text-slate-500 italic">En attente...</span>}
           </div>
         </div>
       </div>
@@ -114,13 +124,7 @@ export default function TermsAgreement({ onAccept }) {
       <div className="flex flex-col items-center gap-6">
         <label className={`flex items-center gap-4 cursor-pointer group max-w-2xl transition-opacity ${sessionStatus !== 'active' ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
           <div className="relative shrink-0">
-            <input 
-              type="checkbox" 
-              className="hidden" 
-              checked={hasRead} 
-              onChange={() => setHasRead(!hasRead)} 
-              disabled={sessionStatus !== 'active'} 
-            />
+            <input type="checkbox" className="hidden" checked={hasRead} onChange={() => setHasRead(!hasRead)} disabled={sessionStatus !== 'active'} />
             <div className={`w-8 h-8 border-2 rounded-xl flex items-center justify-center transition-all ${
               hasRead ? 'bg-[#D4AF37] border-[#D4AF37]' : 'border-[#D4AF37]/30 group-hover:border-[#D4AF37]'
             }`}>
@@ -128,7 +132,7 @@ export default function TermsAgreement({ onAccept }) {
             </div>
           </div>
           <span className="text-slate-300 font-cinzel text-xs md:text-base select-none">
-            Je certifie avoir déverrouillé mon accès institutionnel.
+            Je confirme être authentifié sur le réseau UPPA.
           </span>
         </label>
 
